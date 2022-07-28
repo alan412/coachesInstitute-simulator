@@ -20,6 +20,21 @@ public class SlowerTurn1 extends OpMode {
        leftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
    }
 
+   private void setPowers(double leftSpeed, double rightSpeed){
+       double maxSpeed = 1.0;
+       maxSpeed = Math.max(maxSpeed, Math.abs(leftSpeed));
+       maxSpeed = Math.max(maxSpeed, Math.abs(rightSpeed));
+
+       leftSpeed = leftSpeed / maxSpeed;
+       rightSpeed = rightSpeed / maxSpeed;
+
+       leftMotor.setPower(leftSpeed);
+       rightMotor.setPower(rightSpeed);
+
+       telemetry.addData("Left", leftSpeed);
+       telemetry.addData("Right", rightSpeed);
+   }
+
    @Override
    public void loop() {
        double forward = -gamepad1.left_stick_y;
@@ -27,18 +42,7 @@ public class SlowerTurn1 extends OpMode {
        double leftSpeed = forward + right;
        double rightSpeed = forward - right;
 
-       double maxSpeed = 1.0;
-       maxSpeed = Math.max(maxSpeed, Math.abs(leftSpeed));
-       maxSpeed = Math.max(maxSpeed, Math.abs(rightSpeed));
-
-       leftSpeed = leftSpeed / maxSpeed;
-       rightSpeed = rightSpeed / maxSpeed;
-       
-       leftMotor.setPower(leftSpeed);
-       rightMotor.setPower(rightSpeed);
-      
-       telemetry.addData("Left", leftSpeed);
-       telemetry.addData("Right", rightSpeed);
+       setPowers(leftSpeed, rightSpeed);
    }
 }
 

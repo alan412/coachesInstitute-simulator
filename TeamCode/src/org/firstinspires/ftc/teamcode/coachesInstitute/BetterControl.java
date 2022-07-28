@@ -5,7 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
-@TeleOp(group="@CoachesInstitute")
+@TeleOp(group = "@CoachesInstitute")
 public class BetterControl extends OpMode {
     DcMotor leftMotor;
     DcMotor rightMotor;

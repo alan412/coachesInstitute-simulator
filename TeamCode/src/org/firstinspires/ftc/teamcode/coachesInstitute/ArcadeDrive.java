@@ -1,8 +1,5 @@
 package org.firstinspires.ftc.teamcode.coachesInstitute;
 
-import static java.lang.Math.abs;
-import static java.lang.Math.max;
-
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;

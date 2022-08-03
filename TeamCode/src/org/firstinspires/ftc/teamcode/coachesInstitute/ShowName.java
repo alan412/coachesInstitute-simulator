@@ -3,7 +3,7 @@ package org.firstinspires.ftc.teamcode.coachesInstitute;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
-@TeleOp(group="@Coaches Institute")
+@TeleOp(group="@CoachesInstitute")
 public class ShowName extends OpMode {
     @Override
     public void init() {

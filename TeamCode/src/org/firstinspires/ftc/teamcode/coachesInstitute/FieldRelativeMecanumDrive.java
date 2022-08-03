@@ -70,7 +70,7 @@ public class FieldRelativeMecanumDrive extends OpMode {
         // convert back to cartesian
         double newForward = r * Math.sin(theta);
         double newRight = r * Math.cos(theta);
-        
+
         drive(newForward, newRight, rotate);
     }
 

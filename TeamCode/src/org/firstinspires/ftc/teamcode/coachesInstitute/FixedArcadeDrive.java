@@ -5,7 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
-@TeleOp(group = "@CoachesInstitute")
+@TeleOp(group="@CoachesInstitute")
 public class FixedArcadeDrive extends OpMode {
     DcMotor leftMotor;
     DcMotor rightMotor;
@@ -20,7 +20,7 @@ public class FixedArcadeDrive extends OpMode {
         leftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
     }
 
-    private void setPowers(double leftSpeed, double rightSpeed) {
+    void setPowers(double leftSpeed, double rightSpeed) {
         double maxSpeed = 1.0;
         maxSpeed = Math.max(maxSpeed, Math.abs(leftSpeed));
         maxSpeed = Math.max(maxSpeed, Math.abs(rightSpeed));

@@ -14,6 +14,5 @@ public class ShowGamepad extends OpMode {
     public void loop() {
         telemetry.addData("Left X", gamepad1.left_stick_x);
         telemetry.addData("Left Y", gamepad1.left_stick_y);
-
     }
 }

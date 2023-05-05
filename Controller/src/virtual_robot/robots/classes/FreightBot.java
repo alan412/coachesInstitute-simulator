@@ -48,7 +48,7 @@ import java.util.HashMap;
  * combo box. The filename refers to the fxml file that contains the markup for the graphical UI.
  * Note: the fxml file must be located in the virtual_robot.robots.classes.fxml folder.
  */
-@BotConfig(name = "Freight Bot", filename = "freight_bot")
+//@BotConfig(name = "Freight Bot", filename = "freight_bot")
 public class FreightBot extends MecanumPhysicsBase implements ControlsElements {
 
     /*
@@ -483,8 +483,20 @@ public class FreightBot extends MecanumPhysicsBase implements ControlsElements {
         Transform tLeftFinger = Dyn4jUtil.multiplyTransforms(chassisBody.getTransform(), tLeftFingerChassis);
         Transform tRightFinger = Dyn4jUtil.multiplyTransforms(chassisBody.getTransform(), tRightFingerChassis);
         armBody.setTransform(tArm);
+        armBody.setLinearVelocity(0,0);
+        armBody.setAngularVelocity(0);
+        armBody.clearAccumulatedForce();
+        armBody.clearAccumulatedTorque();
         leftFingerBody.setTransform(tLeftFinger);
+        leftFingerBody.setLinearVelocity(0,0);
+        leftFingerBody.setAngularVelocity(0);
+        leftFingerBody.clearAccumulatedTorque();
+        leftFingerBody.clearAccumulatedForce();;
         rightFingerBody.setTransform(tRightFinger);
+        rightFingerBody.setLinearVelocity(0,0);
+        rightFingerBody.setAngularVelocity(0);
+        rightFingerBody.clearAccumulatedForce();
+        rightFingerBody.clearAccumulatedTorque();
 
         if (freight != null) {
             loadFreight(freight);

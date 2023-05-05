@@ -2,8 +2,11 @@ package virtual_robot.controller;
 
 import com.qualcomm.robotcore.eventloop.opmode.*;
 import com.qualcomm.robotcore.hardware.*;
+import com.qualcomm.robotcore.util.Range;
+import com.studiohartman.jamepad.ControllerIndex;
 import com.studiohartman.jamepad.ControllerManager;
 import com.studiohartman.jamepad.ControllerState;
+import com.studiohartman.jamepad.ControllerUnpluggedException;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
@@ -72,6 +75,7 @@ public class VirtualRobotController {
     @FXML private BorderPane borderPane;
     @FXML private CheckBox cbxShowPath;
     @FXML private CheckBox checkBoxAutoHuman;
+    @FXML private Label lblRunTime;
 
     // dyn4j world
     World<Body> world = new World<>();
@@ -548,15 +552,17 @@ public class VirtualRobotController {
             bot.getHardwareMap().setActive(false);
             bot.powerDownAndReset();
             Config.GAME.stopGameElements();
-            if (Config.USE_VIRTUAL_GAMEPAD) virtualGamePadController.resetGamePad();
+            gamePadHelper.onOpModeFinished();
             initializeTelemetryTextArea();
             cbxConfig.setDisable(false);
         }
     }
 
     private void runOpModeAndCleanUp(){
+        Platform.runLater(()->lblRunTime.setText("0.00"));
 
         try {
+
             //Activate the hardware map, so that calls to "get" on the hardware map itself, and on dcMotor, etc,
             //will return hardware objects
             bot.getHardwareMap().setActive(true);
@@ -587,14 +593,20 @@ public class VirtualRobotController {
             //will allow waitForStart() to finish executing.
             if (!Thread.currentThread().isInterrupted()) opMode.start();
 
+            long opModeStartNanos = System.nanoTime();
+
             while (opModeStarted && !Thread.currentThread().isInterrupted()) {
-                //For regular opMode, run user-defined loop() method. For Linear opMode, loop() checks whether
-                //runOpMode has exited; if so, it interrupts the opModeThread.
+                // Update the run time display
+                final long opModeRunNanos = System.nanoTime() - opModeStartNanos;
+                Platform.runLater(()->lblRunTime.setText(String.format("%.2f", opModeRunNanos/1000000000.0)));
 
                 // to keep the guarantee that this is updated
                 opMode.time = opMode.getRuntime();
 
+                //For regular opMode, run user-defined loop() method. For Linear opMode, loop() checks whether
+                //runOpMode has exited; if so, it interrupts the opModeThread.
                 opMode.loop();
+
                 //For regular op mode only, update telemetry after each execution of loop()
                 //For linear op mode, do-nothing
                 opMode.internalPostLoop();
@@ -627,13 +639,13 @@ public class VirtualRobotController {
         if (!executorService.isShutdown()) executorService.shutdown();
         opModeInitialized = false;
         opModeStarted = false;
+        gamePadHelper.onOpModeFinished();
         Platform.runLater(new Runnable() {
             public void run() {
                 driverButton.setText("INIT");
                 //resetGamePad();
                 initializeTelemetryTextArea();
                 cbxConfig.setDisable(false);
-                if (Config.USE_VIRTUAL_GAMEPAD) virtualGamePadController.resetGamePad();
             }
         });
 
@@ -779,19 +791,33 @@ public class VirtualRobotController {
         return keyState.get(code);
     }
 
-    public class ColorSensorImpl implements ColorSensor {
+    public class ColorSensorImpl implements ColorSensor, ColorRangeSensor {
         private int red = 0;
         private int green = 0;
         private int blue = 0;
         private int alpha = 0;
-        public synchronized int red(){ return red; }
-        public synchronized int green(){ return green; }
-        public synchronized int blue(){ return blue; }
-        public synchronized int alpha() { return alpha; }
+        private double gain = 1.0;
+        private double distanceCM = 0.0;
 
-        public synchronized void updateColor(double x, double y){
-            int colorX = (int)(x + halfFieldWidth);
-            int colorY = (int)(halfFieldWidth - y);
+        public synchronized int red() {
+            return red;
+        }
+
+        public synchronized int green() {
+            return green;
+        }
+
+        public synchronized int blue() {
+            return blue;
+        }
+
+        public synchronized int alpha() {
+            return alpha;
+        }
+
+        public synchronized void updateColor(double x, double y) {
+            int colorX = (int) (x + halfFieldWidth);
+            int colorY = (int) (halfFieldWidth - y);
             double tempRed = 0.0;
             double tempGreen = 0.0;
             double tempBlue = 0.0;
@@ -804,14 +830,68 @@ public class VirtualRobotController {
                 }
             tempRed = Math.floor( tempRed * 256.0 / 81.0 );
             if (tempRed == 256) tempRed = 255;
-            tempGreen = Math.floor( tempGreen * 256.0 / 81.0 );
+            tempGreen = Math.floor(tempGreen * 256.0 / 81.0);
             if (tempGreen == 256) tempGreen = 255;
-            tempBlue = Math.floor( tempBlue * 256.0 / 81.0 );
+            tempBlue = Math.floor(tempBlue * 256.0 / 81.0);
             if (tempBlue == 256) tempBlue = 255;
-            red = (int)tempRed;
-            green = (int)tempGreen;
-            blue = (int)tempBlue;
+            red = (int) tempRed;
+            green = (int) tempGreen;
+            blue = (int) tempBlue;
             alpha = Math.max(red, Math.max(green, blue));
+        }
+
+        public synchronized void setDistance(double distance, DistanceUnit distanceUnit) {
+            distanceCM = distanceUnit.toCm(distance);
+        }
+
+        @Override
+        public synchronized double getDistance(DistanceUnit distanceUnit) {
+            return distanceUnit.fromCm(distanceCM);
+        }
+
+        @Override
+        public double getLightDetected() {
+            return 0;
+        }
+
+        @Override
+        public double getRawLightDetected() {
+            return 0;
+        }
+
+        @Override
+        public double getRawLightDetectedMax() {
+            return 1.0;
+        }
+
+        @Override
+        public void enableLed(boolean enable) {
+
+        }
+
+        @Override
+        public String status() {
+            return String.format(Locale.getDefault(), "%s on %s", getDeviceName(), getConnectionInfo());
+        }
+
+        @Override
+        public synchronized NormalizedRGBA getNormalizedColors() {
+            NormalizedRGBA nRGBA = new NormalizedRGBA();
+            nRGBA.red = red / 256.0f;
+            nRGBA.green = green / 256.0f;
+            nRGBA.blue = blue / 256.0f;
+            nRGBA.alpha = alpha / 256.0f;
+            return nRGBA;
+        }
+
+        @Override
+        public synchronized float getGain() {
+            return (float) gain;
+        }
+
+        @Override
+        public synchronized void setGain(float newGain) {
+            gain = newGain;
         }
     }
 
@@ -887,6 +967,7 @@ public class VirtualRobotController {
 
     public interface GamePadHelper extends Runnable{
         public void quit();
+        public void onOpModeFinished();
     }
 
     public class VirtualGamePadHelper implements GamePadHelper {
@@ -894,10 +975,19 @@ public class VirtualRobotController {
         public void run() {
             VirtualGamePadController.ControllerState state = virtualGamePadController.getState();
             gamePad1.update(state);
+            virtualGamePadController.setOutputs(gamePad1);
             gamePad2.resetValues();
         }
 
-        public void quit(){}
+        public void quit(){
+            //Make sure that LED and Rumble threads are interrupted if user closes the application while an op mode is
+            //running.
+            virtualGamePadController.interruptLEDandRumbleThreads();
+        }
+
+        public void onOpModeFinished(){
+            virtualGamePadController.resetGamePad();
+        }
     }
 
     public class RealGamePadHelper implements  GamePadHelper {
@@ -911,6 +1001,8 @@ public class VirtualRobotController {
         private boolean changingGamePadConfig = false;
 
         private ControllerManager controller = null;
+
+        private Thread[] rumbleThreads = new Thread[2];
 
         public RealGamePadHelper(){
             controller = new ControllerManager(2);
@@ -978,10 +1070,75 @@ public class VirtualRobotController {
             if (gamePad2Index == 0) gamePad2.update(state0);
             else if (gamePad2Index == 1) gamePad2.update(state1);
             else gamePad2.resetValues();
+
+            setOutputs(gamePad1, gamePad1Index);
+            setOutputs(gamePad2, gamePad2Index);
         }
 
+        public void setOutputs(Gamepad gamepad, final int gamePadIndex){
+            if (gamePadIndex <0 || gamePadIndex >1) return;
+            ControllerIndex controllerIndex = controller.getControllerIndex(gamePadIndex);
+            Gamepad.RumbleEffect rumbles = gamepad.rumbleQueue.poll();
+            if (rumbles == null) return;
+            if (rumbleThreads[gamePadIndex] != null){
+                rumbleThreads[gamePadIndex].interrupt();
+            }
+
+            // Make this final so accessable from rumble thread
+            final ListIterator<Gamepad.RumbleEffect.Step> stepIterator = rumbles.steps.listIterator();
+
+            rumbleThreads[gamePadIndex] = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    while (stepIterator.hasNext()) {
+                        Gamepad.RumbleEffect.Step step = stepIterator.next();
+                        float leftMagnitude = (float)Range.scale((double)step.large, 0, 255, 0, 1);
+                        float rightMagnitude = (float)Range.scale((double)step.small, 0, 255, 0, 1);
+
+                        try {
+                            controllerIndex.doVibration(leftMagnitude, rightMagnitude, 300000);
+                        } catch (ControllerUnpluggedException ex) {
+                            return;
+                        }
+                        if (step.duration == -1) {
+                            return;
+                        }
+                        try {
+                            Thread.sleep(step.duration);
+                        } catch (InterruptedException e) {
+                            return;  // don't know why it was interrupted, but lets just bail on this sequence
+                        }
+                    }
+
+                    try{
+                        controllerIndex.doVibration(0, 0, 300000);
+                    } catch (ControllerUnpluggedException ex) {
+                        return;
+                    }
+
+                }
+            });
+
+            rumbleThreads[gamePadIndex].start();
+        }
+
+
         public void quit(){
+            interruptRumbleThreads();
             controller.quitSDLGamepad();
+        }
+
+        public void onOpModeFinished(){
+            interruptRumbleThreads();
+        }
+
+        public void interruptRumbleThreads(){
+            if (rumbleThreads[0] != null){
+                rumbleThreads[0].interrupt();
+            }
+            if (rumbleThreads[1] != null){
+                rumbleThreads[1].interrupt();
+            }
         }
 
     }

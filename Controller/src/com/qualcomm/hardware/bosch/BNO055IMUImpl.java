@@ -128,6 +128,7 @@ public class BNO055IMUImpl implements BNO055IMU {
      * @param heading
      */
     public synchronized void updateHeadingRadians( double heading ){
+        if (!initialized) return;
         long nanos = System.nanoTime();
         if (nanos < (prevNanos + latencyNanos)) return;
         headingRadians = heading;

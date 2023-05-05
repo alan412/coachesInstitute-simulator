@@ -13,7 +13,10 @@ public class DcMotorImpl implements DcMotor {
     public final MotorConfigurationType MOTOR_CONFIGURATION_TYPE;
 
     //Proportionate coefficient for RUN_TO_POSITION mode
-    private final double COEFF_PROPORTIONATE = 5.0;
+    protected final double COEFF_PROPORTIONATE = 5.0;
+
+    // Rotation offset (in rotations) for isBusy
+    protected final double MAX_ROT_OFFSET = 0.005;
 
     //Target position for RUN_TO_POSITION mode
     private int targetPosition = 0;
@@ -295,7 +298,6 @@ public class DcMotorImpl implements DcMotor {
      * Result will become false when: ticks are nearly at the target AND speed is very slow
      */
     public synchronized boolean isBusy(){
-        final double MAX_ROT_OFFSET = 0.02;
         int pos = getCurrentPosition();
         boolean atTarget = Math.abs(pos-targetPosition)/MOTOR_TYPE.TICKS_PER_ROTATION < MAX_ROT_OFFSET;
         boolean almostStopped = Math.abs(actualSpeed) / (COEFF_PROPORTIONATE * MOTOR_TYPE.TICKS_PER_ROTATION) < MAX_ROT_OFFSET;

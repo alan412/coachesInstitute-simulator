@@ -1,14 +1,13 @@
 package org.firstinspires.ftc.teamcode.coachesInstitute;
 
-import com.qualcomm.hardware.bosch.BNO055IMU;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.IMU;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
-import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
-import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
+import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
 @Autonomous(group="@CoachesInstitute")
 public class FieldRelativeMecanumDrive extends OpMode {
@@ -16,7 +15,8 @@ public class FieldRelativeMecanumDrive extends OpMode {
     DcMotor frontRightMotor;
     DcMotor backLeftMotor;
     DcMotor backRightMotor;
-    BNO055IMU imu;
+
+    IMU imu;
 
     @Override
     public void init() {
@@ -33,9 +33,12 @@ public class FieldRelativeMecanumDrive extends OpMode {
         backLeftMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         backRightMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        imu = hardwareMap.get(BNO055IMU.class, "imu");
-        BNO055IMU.Parameters parameters = new BNO055IMU.Parameters();
-        imu.initialize(parameters);
+        imu = hardwareMap.get(IMU.class, "imu");
+        RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.UP;
+        RevHubOrientationOnRobot.UsbFacingDirection  usbDirection  = RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
+
+        RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(logoDirection, usbDirection);
+        imu.initialize(new IMU.Parameters(orientationOnRobot));
     }
 
     // Thanks to FTC16072 for sharing this code!!
@@ -60,12 +63,13 @@ public class FieldRelativeMecanumDrive extends OpMode {
     }
 
     private void driveFieldRelative(double forward, double right, double rotate){
-        Orientation orientation = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.RADIANS);
+        YawPitchRollAngles orientation = imu.getRobotYawPitchRollAngles();
+
         // convert to polar
         double theta = Math.atan2(forward, right);
         double r = Math.hypot(right, forward);
         // rotate angle
-        theta = AngleUnit.normalizeRadians(theta - orientation.firstAngle);
+        theta = AngleUnit.normalizeRadians(theta - orientation.getYaw(AngleUnit.RADIANS));
 
         // convert back to cartesian
         double newForward = r * Math.sin(theta);

@@ -1,8 +1,14 @@
 # A 2D simulator to help beginning Java programmers learn to program for FTC Robotics.
 
-New:  Updated to reflect changes in FTC SDK 8.1, with addition of the IMU interface, ImuOrientationOnRobot interface,
-    RevHubOrientationOnRobot class, and Quaternion class. All robot configurations have an imu which can be used
-    either with the old BNO055IMU interface, or with the new IMU interface.
+New:  
+
+SparFunOTOS Odometry Sensor added. It is included in the robot configurations with Mecanum drivetrains,
+but can be easily added to other drivetrains.
+
+OctoQuad Encoder Sensor added. It is included in the Mecanum and XDrive robot configurations, with channels
+assigned as follows: 0->back left drive motor; 1->front left drive motor; 2->front right drive motor;
+3->back right motor; 4->left deadwheel encoder; 5->right deadwheel encoder; 6-> perpendicular deadwheel
+encoder. You can still use the traditional way of working with the encoders, as well.
 
 Want to use virtual_robot to try out AcmeRobotics RoadRunner? Refer to the 
 [Road-Runner-Quickstart-Instructions](Road-Runner-Quickstart-Instructions.pdf) pdf.
@@ -62,8 +68,8 @@ in the virtual_robot.robots.classes package, and un-commenting its @BotConfig an
 
 To use:
 
-  1. Make sure you have the Java 8 JDK installed on your PC. Also, install the free Community Edition of JetBrains
-     IntelliJ IDEA.
+  1. Make sure you have the Java JDK installed on your PC. Also, install the free Community Edition of JetBrains
+     IntelliJ IDEA. (See the Detailed Installation Instructions PDF)
   2. Download the virtual_robot .zip, and extract contents. Open the project in IntelliJ. You'll see three modules in
      the project (Controller, TeamCode, and virtual_robot) -- the only module you'll need to touch is TeamCode. It
      contains the org.firstinspires.ftc.teamcode package.

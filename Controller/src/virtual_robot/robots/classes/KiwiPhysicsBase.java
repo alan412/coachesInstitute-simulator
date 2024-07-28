@@ -2,7 +2,6 @@ package virtual_robot.robots.classes;
 
 import com.qualcomm.hardware.bosch.BNO055IMUImpl;
 import com.qualcomm.hardware.bosch.BNO055IMUNew;
-import com.qualcomm.hardware.digitalchickenlabs.OctoQuadImpl;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorExImpl;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -23,49 +22,65 @@ import virtual_robot.controller.VirtualRobotController;
 import virtual_robot.util.AngleUtils;
 
 /**
- * For internal use only. Base class for a physics-based robot with four Omni wheels, color sensor,
+ * For internal use only. Base class for a Kiwi drive bot with three Omniwheels, color sensor,
  * four distance sensors, and a BNO055IMU.
  */
-public abstract class XDrivePhysicsBase extends VirtualBot {
+public abstract class KiwiPhysicsBase extends VirtualBot {
 
     public final MotorType MOTOR_TYPE;
     private DcMotorExImpl[] motors = null;
     private BNO055IMUImpl imu = null;
-    private BNO055IMUNew imuNew = null;
+    BNO055IMUNew imuNew = null;
     private VirtualRobotController.ColorSensorImpl colorSensor = null;
     private VirtualRobotController.DistanceSensorImpl[] distanceSensors = null;
-    protected OctoQuadImpl octoQuad = null;
 
-    private double wheelCircumference;
+    /*
+     * Gear ratio for any external gears added in drive train. For now, this is just 1.0. Could easily
+     * add a constructor to MecanumPhysicsBase that allows this to be set to some other value.
+     */
     protected double gearRatioWheel = 1.0;
-    protected double wheelBaseRadius;
 
-    private double[][] tWR; //Transform from wheel motion to robot motion (KINETIC MODEL)
+    /*
+     * Robot geometry, in pixels. These will be calculated in the initialize() method. They cannot be computed
+     * here, because botwidth is not known until the time of construction.
+     */
+    private double wheelCircumference = 4 * Math.PI; // inches
+    private double baseRadius = 8;  // inches
+
+    /*
+     * Transform from wheel motion to robot motion (KINETIC MODEL). This will be computed in the initialize()
+     * method, after basic robot geometry is computed.
+     */
+    private double[][] tWR;
 
     GeneralMatrixF M_ForceWheelToRobot; // Converts from individual wheel forces to total force/torque on robot
     MatrixF M_ForceRobotToWheel;  // Converts from total force/torque on robot to individual wheel forces
-    protected float maxWheelXForce; // Need to assign this in the initialize method.
+    protected float maxWheelForce; // Need to assign this in the initialize method.
 
     /**
      * No-param constructor. Uses the default motor type of Neverest 40
      */
-    public XDrivePhysicsBase() {
+    public KiwiPhysicsBase() {
         super();
         MOTOR_TYPE = MotorType.Neverest40;
     }
 
-    public XDrivePhysicsBase(MotorType driveMotorType){
+    public KiwiPhysicsBase(MotorType driveMotorType){
         super();
         MOTOR_TYPE = driveMotorType;
+    }
+
+    public KiwiPhysicsBase(MotorType driveMotorType, double baseRadius){
+        this(driveMotorType);
+        this.baseRadius = baseRadius;
     }
 
     public void initialize(){
         super.initialize();
         hardwareMap.setActive(true);
         motors = new DcMotorExImpl[]{
+                (DcMotorExImpl) hardwareMap.get(DcMotorEx.class, "front_motor"),
                 (DcMotorExImpl) hardwareMap.get(DcMotorEx.class, "back_left_motor"),
-                (DcMotorExImpl) hardwareMap.get(DcMotorEx.class, "front_left_motor"),
-                (DcMotorExImpl) hardwareMap.get(DcMotorEx.class, "front_right_motor"),
                 (DcMotorExImpl) hardwareMap.get(DcMotorEx.class, "back_right_motor")
         };
         distanceSensors = new VirtualRobotController.DistanceSensorImpl[]{
@@ -78,54 +93,65 @@ public abstract class XDrivePhysicsBase extends VirtualBot {
         imuNew = hardwareMap.get(BNO055IMUNew.class, "imu");
         colorSensor = (VirtualRobotController.ColorSensorImpl) hardwareMap.colorSensor.get("color_sensor");
 
-        octoQuad = hardwareMap.get(OctoQuadImpl.class, "octoquad");
-        for (int i=0; i<4; i++){
-            octoQuad.setEncoder(i, motors[i]);
-        }
 
-        wheelCircumference = Math.PI * botWidth / 4.5;
 
-        double sqrt2 = Math.sqrt(2);
-        wheelBaseRadius = botWidth * (1.0/sqrt2 - 5.0/36.0);
-        float RRt2 = (float)(wheelBaseRadius * sqrt2 / VirtualField.PIXELS_PER_METER);
-
-        tWR = new double[][] {
-                {-0.25*sqrt2, 0.25*sqrt2, -0.25*sqrt2, 0.25*sqrt2},
-                {0.25*sqrt2, 0.25*sqrt2, 0.25*sqrt2, 0.25*sqrt2},
-                {-0.25/ wheelBaseRadius, -0.25/ wheelBaseRadius, 0.25/ wheelBaseRadius, 0.25/ wheelBaseRadius},
-                {-0.25, 0.25, 0.25, -0.25}
+        tWR = new double[][]{
+                {-2.0/3.0, 1.0/3.0, 1.0/3.0},
+                {0, -1.0/Math.sqrt(3), 1.0/Math.sqrt(3)},
+                {1.0/(3.0*baseRadius), 1.0/(3.0*baseRadius), 1.0/(3.0*baseRadius)}
         };
 
-        M_ForceWheelToRobot = new GeneralMatrixF(4, 4, new float[]{
-                1, 1, 1, 1,
-                -1, 1, -1, 1,
-                RRt2, -RRt2, -RRt2, RRt2,
-                1, 1, -1, -1});
+        /*
+         * Converts from the frictional forces at each wheel to the X, Y forces, and Torque
+         * forces on the robot. (in the ROBOT coordinate system)
+         */
+        M_ForceWheelToRobot = new GeneralMatrixF(3, 3, new float[]{
+                -1, 0.5f, 0.5f,
+                0, -(float)Math.sqrt(3)/2f, (float)Math.sqrt(3)/2f,
+                (float)baseRadius, (float)baseRadius, (float)baseRadius});
 
+        /*
+         * Converts from X & Y Forces, Torque, and "Fail" force on robot to the corresponding forces
+         * at each wheel. (in the ROBOT coordinate system)
+         */
         M_ForceRobotToWheel = M_ForceWheelToRobot.inverted();
 
         // Maximum possible frictional force (in robot-X direction) between field and any individual robot wheel.
         // Note the division by 4 (assumes each wheel gets 1/4 of robot mass) and the division by sqrt(2) (because
         // the X-direction force is 1/sqrt(2) times the total friction force on the wheel.
-        maxWheelXForce = (float)(9.8 * chassisBody.getMass().getMass()
-                * Config.FIELD_FRICTION_COEFF / (4.0 * Math.sqrt(2)));
+        maxWheelForce = (float)(9.8 * chassisBody.getMass().getMass()
+                * Config.FIELD_FRICTION_COEFF / 3.0);
 
         hardwareMap.setActive(false);
 
     }
 
+    /**
+     * Create the hardware map for this robot. This will include the drive motors, distance sensors, BNO055IMU,
+     * and color sensor. Child classes can override this method to add additional hardware. In that case,
+     * the first statement in the override method should be: super.createHardwareMap().
+     */
     protected void createHardwareMap() {
         hardwareMap = new HardwareMap();
-        String[] motorNames = new String[]{"back_left_motor", "front_left_motor", "front_right_motor", "back_right_motor"};
+        String[] motorNames = new String[]{"front_motor", "back_left_motor", "back_right_motor"};
         for (String name : motorNames) hardwareMap.put(name, new DcMotorExImpl(MOTOR_TYPE));
         String[] distNames = new String[]{"front_distance", "left_distance", "back_distance", "right_distance"};
         for (String name : distNames) hardwareMap.put(name, controller.new DistanceSensorImpl());
         hardwareMap.put("imu", new BNO055IMUImpl(this, 10));
         hardwareMap.put("imu", new BNO055IMUNew(this, 10));
         hardwareMap.put("color_sensor", controller.new ColorSensorImpl());
-        hardwareMap.put("octoquad", new OctoQuadImpl());
     }
 
+    /**
+     * Update the position of the robot on the field, as well as the distance, BNO055IMU, and color sensors.
+     *
+     * Updating robot position involves:
+     *     1) Get new position and orientation from the dyn4j physics engine.
+     *     2) Using kinetic model, "preload" the chassis body with force and torque to be applied
+     *        during the next update of the physics engine.
+     *
+     * @param millis milliseconds since the previous update
+     */
     public synchronized void updateStateAndSensors(double millis) {
 
         /*
@@ -137,30 +163,28 @@ public abstract class XDrivePhysicsBase extends VirtualBot {
 
         // Compute new wheel speeds in pixel units per second
 
-        double[] wSpd = new double[4];
-        for (int i=0; i<4; i++){
+        double[] wSpd = new double[3];
+        for (int i=0; i<3; i++){
             motors[i].update(millis);
             wSpd[i] = motors[i].getVelocity(AngleUnit.RADIANS) * gearRatioWheel * wheelCircumference  / (2.0 * Math.PI);
             boolean mtRev = MOTOR_TYPE.REVERSED;
             boolean dirRev = motors[i].getDirection() == DcMotorSimple.Direction.REVERSE;
-            if (
-                    i<2 && (mtRev && dirRev || !mtRev && !dirRev) || i>=2 && (mtRev && !dirRev || !mtRev && dirRev)
-            ) wSpd[i] = -wSpd[i];
+            if ( (mtRev && !dirRev) || (!mtRev && dirRev) ) wSpd[i] = -wSpd[i];
         }
 
         /*
          * Based on wheel speeds, compute the target final robot velocity and angular speed, in the robot
          * coordinate system.
          */
-        double[] robotTargetSpd = new double[]{0,0,0,0};
-        for (int i=0; i<4; i++){
-            for (int j=0; j<4; j++){
+        double[] robotTargetSpd = new double[]{0,0,0};
+        for (int i=0; i<3; i++){
+            for (int j=0; j<3; j++){
                 robotTargetSpd[i] += tWR[i][j] * wSpd[j];
             }
         }
 
-        robotTargetSpd[0] /= VirtualField.PIXELS_PER_METER;
-        robotTargetSpd[1] /= VirtualField.PIXELS_PER_METER;
+        robotTargetSpd[0] /= VirtualField.INCHES_PER_METER;
+        robotTargetSpd[1] /= VirtualField.INCHES_PER_METER;
 
         /*
          * Compute an estimated final heading. This is used only to convert the target final robot velocity
@@ -197,32 +221,32 @@ public abstract class XDrivePhysicsBase extends VirtualBot {
 
         // VectorF containing total force and torque required on bot to achieve the tentative position change,
         // in robot coordinate system
-        VectorF totalForce = new VectorF(fXR, fYR, (float)torque, 0);
+        VectorF totalForce = new VectorF(fXR, fYR, (float)torque);
 
         // Required friction force from floor to achieve the tentative position change. For now, this will
         // be the same as totalForce, but may want to add offsets to collision forces
-        VectorF frictionForces = new VectorF(totalForce.get(0), totalForce.get(1), totalForce.get(2), totalForce.get(3));
+        VectorF frictionForces = new VectorF(totalForce.get(0), totalForce.get(1), totalForce.get(2));
 
         // Determine the X-direction forces that would be required on each of the bot's four wheels to achieve
         // the total frictional force and torque predicted by the kinematic model. Note that the magnitude of
         // total force on each wheel is sqrt(2) times abs(x-direction force). (ROBOT coordinate system)
 
-        VectorF wheel_X_Forces = M_ForceRobotToWheel.multiplied(frictionForces);
+        VectorF wheel_Forces = M_ForceRobotToWheel.multiplied(frictionForces);
 
         //If any of the wheel forces exceeds the product of muStatic*mass*gravity, reduce the magnitude
         //of that force to muKinetic*mass*gravity, keeping the direction the same
 
-        for (int i=0; i<4; i++){
-            float f = wheel_X_Forces.get(i);
-            if (Math.abs(f) > maxWheelXForce) {
-                wheel_X_Forces.put(i, maxWheelXForce * Math.signum(f));
+        for (int i=0; i<3; i++){
+            float f = wheel_Forces.get(i);
+            if (Math.abs(f) > maxWheelForce) {
+                wheel_Forces.put(i, maxWheelForce * Math.signum(f));
             }
         }
 
         //Based on the adjusted forces at each wheel, determine net frictional force and torque on the bot,
         //Force is in ROBOT COORDINATE system
 
-        frictionForces = M_ForceWheelToRobot.multiplied(wheel_X_Forces);
+        frictionForces = M_ForceWheelToRobot.multiplied(wheel_Forces);
 
         // Convert these adjusted friction forces to WORLD COORDINATES  and put into the original
         // force and torque variables
@@ -253,18 +277,21 @@ public abstract class XDrivePhysicsBase extends VirtualBot {
 
         for (int i = 0; i < 4; i++) {
             double sensorHeading = AngleUtils.normalizeRadians(headingRadians + i * piOver2);
-            distanceSensors[i].updateDistance(x - halfBotWidth * Math.sin(sensorHeading),
-                    y + halfBotWidth * Math.cos(sensorHeading), sensorHeading);
+            distanceSensors[i].updateDistance(x - baseRadius * VirtualField.PIXELS_PER_INCH * Math.sin(sensorHeading),
+                    y + baseRadius * VirtualField.PIXELS_PER_INCH * Math.cos(sensorHeading), sensorHeading);
         }
 
     }
 
+    /**
+     * Display the robot in the current orientation and position.
+     */
     public synchronized void updateDisplay() {
         super.updateDisplay();
     }
 
     public void powerDownAndReset() {
-        for (int i = 0; i < 4; i++) motors[i].stopAndReset();
+        for (int i = 0; i < 3; i++) motors[i].stopAndReset();
         imu.close();
         chassisBody.setAngularVelocity(0);
         chassisBody.setLinearVelocity(0,0);
@@ -284,13 +311,29 @@ public abstract class XDrivePhysicsBase extends VirtualBot {
     public void setUpChassisBody(){
         chassisBody = new Body();
         chassisBody.setUserData(this);
-        double botWidthMeters = botWidth / VirtualField.PIXELS_PER_METER;
+        double botRadiusMeters = baseRadius / VirtualField.INCHES_PER_METER;
         chassisFixture = chassisBody.addFixture(
-                new org.dyn4j.geometry.Rectangle(botWidthMeters, botWidthMeters), 71.76, 0, 0);
-        chassisRectangle = (org.dyn4j.geometry.Rectangle)chassisFixture.getShape();
+                new org.dyn4j.geometry.Circle(botRadiusMeters), 71.76, 0, 0);
+//        chassisRectangle = (org.dyn4j.geometry.Rectangle)chassisFixture.getShape();
         chassisFixture.setFilter(Filters.CHASSIS_FILTER);
         chassisBody.setMass(MassType.NORMAL);
         world.addBody(chassisBody);
+    }
+
+
+    /**
+     * Constrain robot to the boundaries X_MIN, X_MAX, Y_MIN, Y_MAX
+     * If physics simulation is being used, this should not be called during active simulation (just let robot collide
+     * with walls). But, it is needed for positioning robot with mouse.
+     */
+    protected void constrainToBoundaries(){
+        final double botRadiusPixels = baseRadius * VirtualField.PIXELS_PER_INCH;
+        if (Math.abs(x) >  (VirtualField.X_MAX - botRadiusPixels)) {
+            x = (VirtualField.X_MAX - botRadiusPixels) * Math.signum(x);
+        }
+        if (Math.abs(y) > (VirtualField.Y_MAX - botRadiusPixels)) {
+            y = (VirtualField.Y_MAX - botRadiusPixels) * Math.signum(y);
+        }
     }
 
 }
